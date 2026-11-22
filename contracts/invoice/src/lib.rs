@@ -91,6 +91,13 @@ pub struct InvoicePaid {
     pub paid_at: u64,
 }
 
+/// Maximum page size for `get_invoice_range`. Bounding the read footprint of a
+/// single call keeps it well inside Soroban resource limits; callers page
+/// through the rest. 25 entries stays comfortably under the read-entry and
+/// instruction budgets — the test `get_invoice_range_caps_page_at_max_len`
+/// verifies a full page fits.
+const MAX_PAGE_LEN: u32 = 25;
+
 #[contract]
 pub struct InvoiceContract;
 
@@ -381,35 +388,44 @@ impl InvoiceContract {
         out
     }
 
-    /// Returns the total number of invoices ever created (the next invoice id).
+    /// Returns the total number of invoices ever created. `NextId` is the id
+    /// the *next* invoice will get, so the count is `NextId - 1` (0 before the
+    /// first invoice). Clients can loop `1..=invoice_count()` to enumerate
+    /// every id exactly once.
     pub fn invoice_count(env: Env) -> Result<u64, Error> {
-        env.storage()
+        let next_id: u64 = env
+            .storage()
             .instance()
             .get(&DataKey::NextId)
-            .ok_or(Error::NotInitialized)
+            .ok_or(Error::NotInitialized)?;
+        Ok(next_id.saturating_sub(1))
     }
 
-    /// Paginated read of invoices for a freelancer. Returns up to `len` invoices
-    /// starting at index `start` (0-indexed), oldest first.
-    pub fn get_invoice_range(
-        env: Env,
-        freelancer: Address,
-        start: u32,
-        len: u32,
-    ) -> Vec<Invoice> {
+    /// Paginated read of invoices for a freelancer. Returns up to `len`
+    /// invoices starting at index `start` (0-indexed), oldest first.
+    /// `len` is capped at `MAX_PAGE_LEN` (25) so one call cannot blow the
+    /// Soroban resource budget; `start` beyond the end yields an empty page.
+    pub fn get_invoice_range(env: Env, freelancer: Address, start: u32, len: u32) -> Vec<Invoice> {
         let ids: Vec<u64> = env
             .storage()
             .persistent()
             .get(&DataKey::History(freelancer))
             .unwrap_or(Vec::new(&env));
-        
+
         let start_idx = start as usize;
-        let len_val = len as usize;
+        let len_val = len.min(MAX_PAGE_LEN) as usize;
         let mut out: Vec<Invoice> = Vec::new(&env);
-        let end_idx = (start_idx + len_val).min(ids.len() as usize);
-        
+        // Saturating add: `usize` is 32 bits on wasm32v1-none and the release
+        // profile enables overflow-checks, so `start + len` near u32::MAX
+        // would trap instead of returning an empty page.
+        let end_idx = start_idx.saturating_add(len_val).min(ids.len() as usize);
+
         for i in start_idx..end_idx {
-            if let Some(inv) = env.storage().persistent().get(&DataKey::Invoice(ids.get(i as u32).unwrap())) {
+            if let Some(inv) = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Invoice(ids.get(i as u32).unwrap()))
+            {
                 out.push_back(inv);
             }
         }

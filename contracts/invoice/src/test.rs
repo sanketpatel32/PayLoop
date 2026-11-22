@@ -505,22 +505,22 @@ fn history_for_unknown_freelancer_is_empty() {
 // --- Pagination and counter tests -------------------------------------------
 
 #[test]
-fn invoice_count_returns_next_id() {
+fn invoice_count_returns_created_total() {
     let s = setup();
     let freelancer = Address::generate(&s.env);
     let client = Address::generate(&s.env);
 
-    // After initialize, count is 1 (next id to be assigned).
+    // After initialize, no invoices exist yet: count is 0.
     let count = s.contract.invoice_count();
-    assert_eq!(count, 1);
+    assert_eq!(count, 0);
 
     invoice_with_id(&s, &freelancer, &client, 1_000_000);
     let count = s.contract.invoice_count();
-    assert_eq!(count, 2);
+    assert_eq!(count, 1);
 
     invoice_with_id(&s, &freelancer, &client, 2_000_000);
     let count = s.contract.invoice_count();
-    assert_eq!(count, 3);
+    assert_eq!(count, 2);
 }
 
 #[test]
@@ -554,6 +554,55 @@ fn get_invoice_range_respects_bounds() {
     // Get from start beyond end (empty).
     let range = s.contract.get_invoice_range(&freelancer, &5, &2);
     assert_eq!(range.len(), 0);
+}
+
+#[test]
+fn get_invoice_range_handles_extreme_inputs() {
+    let s = setup();
+    let freelancer = Address::generate(&s.env);
+    let client = Address::generate(&s.env);
+
+    for i in 1..=3 {
+        invoice_with_id(&s, &freelancer, &client, 1_000_000i128 * i);
+    }
+
+    // len = 0 returns an empty page.
+    let range = s.contract.get_invoice_range(&freelancer, &0, &0);
+    assert_eq!(range.len(), 0);
+
+    // start beyond the end returns an empty page.
+    let range = s.contract.get_invoice_range(&freelancer, &3, &10);
+    assert_eq!(range.len(), 0);
+
+    // start = u32::MAX must not trap (saturating arithmetic on wasm32) and
+    // simply yields an empty page.
+    let range = s.contract.get_invoice_range(&freelancer, &u32::MAX, &10);
+    assert_eq!(range.len(), 0);
+
+    // A huge len is capped at MAX_PAGE_LEN and returns everything available.
+    let range = s.contract.get_invoice_range(&freelancer, &0, &u32::MAX);
+    assert_eq!(range.len(), 3);
+    assert_eq!(range.get(0).unwrap().id, 1);
+}
+
+#[test]
+fn get_invoice_range_caps_page_at_max_len() {
+    let s = setup();
+    let freelancer = Address::generate(&s.env);
+    let client = Address::generate(&s.env);
+
+    // MAX_PAGE_LEN + 2 invoices prove the page is capped, not just bounded by
+    // the history length.
+    for _ in 0..27 {
+        invoice_with_id(&s, &freelancer, &client, 1_000_000);
+    }
+
+    let range = s.contract.get_invoice_range(&freelancer, &0, &u32::MAX);
+    assert_eq!(range.len(), 25);
+
+    // The remainder is reachable on the next page.
+    let range = s.contract.get_invoice_range(&freelancer, &25, &10);
+    assert_eq!(range.len(), 2);
 }
 
 #[test]

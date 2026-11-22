@@ -68,6 +68,9 @@ once.
 | `release_funds` | — (inert in v1) | `invoice_id` | `()` | — |
 | `get_invoice` | read-only | `invoice_id` | `Invoice` | — |
 | `get_invoice_history` | read-only | `freelancer` | `Vec<Invoice>` | — |
+| `invoice_count` | read-only | — | `u64` total invoices created | — |
+| `get_invoice_range` | read-only | `freelancer`, `start` (u32), `len` (u32) | `Vec<Invoice>` page | — |
+| `get_client_history` | read-only | `client` | `Vec<Invoice>` | — |
 | `default_token_address` | read-only | — | token `Address` | — |
 | `get_allowed_tokens` | read-only | — | `Vec<Address>` | — |
 | `version` | read-only | — | `"v1"` symbol | — |
@@ -94,6 +97,12 @@ Semantics worth knowing:
 - No allowlist for clients: any address can fund any `Pending` invoice by
   passing its own auth. This is intentional — the invoice names who *should*
   pay, but the chain doesn't need to restrict who *can*.
+- `invoice_count` is the number of invoices ever created (`NextId - 1`), so
+  `1..=invoice_count()` enumerates every id exactly once.
+- `get_invoice_range` pages a freelancer's history: `len` is capped at
+  `MAX_PAGE_LEN` (25) to bound the read footprint, `start` beyond the end
+  returns an empty page, and `start + len` is saturating so extreme `u32`
+  inputs can never trap.
 
 ## Error codes
 
