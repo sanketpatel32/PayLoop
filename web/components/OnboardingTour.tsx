@@ -98,11 +98,7 @@ export function OnboardingTour() {
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <button
-            onClick={close}
-            className="btn-ghost text-sm"
-            disabled={step === 0}
-          >
+          <button onClick={close} className="btn-ghost text-sm">
             Skip
           </button>
           <div className="flex gap-1.5">

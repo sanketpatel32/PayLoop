@@ -165,14 +165,38 @@ export async function getAllowedTokenIds(): Promise<string[]> {
 const READ_SOURCE =
   "GBTDIHYJA4OPTDBDRKH5A5PHBSH7QVAEY46V27DCB24SXNRXIQNHSNUM";
 
+// u64 bound: ids outside this range cannot exist on the contract, so they
+// short-circuit to "not found" without an RPC call (mistyped /pay links).
+const U64_MAX = (1n << 64n) - 1n;
+
+function isValidInvoiceId(id: string): boolean {
+  if (!/^\d+$/.test(id)) return false;
+  try {
+    return BigInt(id) <= U64_MAX;
+  } catch {
+    return false;
+  }
+}
+
+// The contract raises Error #3 (InvoiceNotFound) for unknown ids; the host
+// serialises it as "Error(Contract, #3)", so match both the name and the
+// numeric form the RPC actually returns.
+function isInvoiceNotFoundError(e: unknown): boolean {
+  const msg = String((e as any)?.message ?? e);
+  return (
+    msg.includes("InvoiceNotFound") || /Error\(Contract,\s*#3\)/.test(msg)
+  );
+}
+
 export async function getInvoice(id: string): Promise<Invoice | null> {
+  if (!isValidInvoiceId(id)) return null;
   try {
     const raw = await simulateRead("get_invoice", [
       nativeToScVal(BigInt(id), { type: "u64" }),
     ]);
     return raw ? decodeInvoice(raw) : null;
   } catch (e: any) {
-    if (String(e?.message).includes("InvoiceNotFound")) return null;
+    if (isInvoiceNotFoundError(e)) return null;
     throw e;
   }
 }
@@ -237,7 +261,14 @@ export async function getTokenBalance(
     .setTimeout(30)
     .build();
   const sim = await srv.simulateTransaction(tx);
-  if (rpc.Api.isSimulationError(sim) || !sim.result?.retval) return 0n;
+  // Never report 0 on failure: callers would render a false "0 USDC" and
+  // nudge the user to the faucet. Errors propagate so the UI can show "—".
+  if (rpc.Api.isSimulationError(sim)) {
+    throw new Error(`Balance check failed: ${sim.error}`);
+  }
+  if (!sim.result?.retval) {
+    throw new Error("Balance check returned no result.");
+  }
   return BigInt(scValToNative(sim.result.retval) ?? 0);
 }
 
