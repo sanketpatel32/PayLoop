@@ -23,7 +23,11 @@ export function FaucetButton({ onDone }: { onDone?: () => void }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Faucet request failed.");
-      setMsg("Sent 500 test USDC");
+      setMsg(
+        typeof data.amount === "number"
+          ? `Sent ${data.amount} test USDC`
+          : "Test USDC sent"
+      );
       onDone?.();
     } catch (e: any) {
       setMsg(e?.message ?? "Faucet failed.");

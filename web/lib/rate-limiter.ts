@@ -44,7 +44,13 @@ export class InMemoryRateLimiter implements RateLimiter {
   private dailyTotal = 0n;
   private dailyResetTime = Date.now() + this.dailyWindow;
 
-  constructor(private config: RateLimiterConfig = DEFAULT_CONFIG) {}
+  private config: RateLimiterConfig;
+
+  constructor(config: RateLimiterConfig = DEFAULT_CONFIG) {
+    // Explicit field (not a parameter property) so `node --test` can load this
+    // file with type-stripping — see lib/__tests__/rate-limiter.test.mjs.
+    this.config = config;
+  }
 
   async checkLimit(ip: string, address: string): Promise<number | null> {
     const now = Date.now();
@@ -140,7 +146,10 @@ export class RedisRateLimiter implements RateLimiter {
   private perAddressWindow = 3600; // 1 hour in seconds
   private dailyWindow = 86400; // 1 day in seconds
 
-  constructor(private config: RateLimiterConfig = DEFAULT_CONFIG) {
+  private config: RateLimiterConfig;
+
+  constructor(config: RateLimiterConfig = DEFAULT_CONFIG) {
+    this.config = config;
     const url = process.env.UPSTASH_REDIS_REST_URL;
     const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -223,7 +232,10 @@ export class VercelKVRateLimiter implements RateLimiter {
   private perAddressWindow = 3600;
   private dailyWindow = 86400;
 
-  constructor(private config: RateLimiterConfig = DEFAULT_CONFIG) {
+  private config: RateLimiterConfig;
+
+  constructor(config: RateLimiterConfig = DEFAULT_CONFIG) {
+    this.config = config;
     const url = process.env.KV_REST_API_URL;
     const token = process.env.KV_REST_API_TOKEN;
 

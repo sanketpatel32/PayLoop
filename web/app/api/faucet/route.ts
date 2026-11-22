@@ -137,7 +137,9 @@ export async function POST(req: Request) {
     }
 
     await rateLimiter.recordMint(ip, address, MINT_AMOUNT);
-    return NextResponse.json({ ok: true, hash: sent.hash });
+    const decimals = Number(process.env.NEXT_PUBLIC_TOKEN_DECIMALS ?? "7");
+    const amount = Number(MINT_AMOUNT) / 10 ** decimals;
+    return NextResponse.json({ ok: true, hash: sent.hash, amount });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message ?? "Faucet failed unexpectedly." },
