@@ -66,9 +66,22 @@ for review.
   implemented versus mocked or documentation-only (see `docs/ARCHITECTURE.md`
   and `docs/ANCHOR.md` for the current split).
 
+## Changelog and versioning
+
+Every user-visible change gets a line in `CHANGELOG.md` under `Unreleased`
+(Keep a Changelog format). Add your entry in the same PR as the change —
+don't wait for release time. On a contract redeploy the `Unreleased` entries
+move under a heading matching the new `version()` symbol.
+
+The contract version follows the policy in
+`contracts/invoice/README.md#versioning`: `vMAJOR_MINOR_PATCH`, MINOR for
+wire-compatible ABI additions. Bump `version()` in the same PR that changes
+the ABI, and update `deployment.testnet.json`'s `contractVersion` only when
+the change is actually deployed.
+
 ## Test policy
 
-- `contracts/invoice/src/test.rs` must pass in full (18 tests; `MockAuth`-based
+- `contracts/invoice/src/test.rs` must pass in full (26 tests; `MockAuth`-based
   authorization tests sit next to `mock_all_auths` convenience tests — new
   state-changing entrypoints should get both).
 - Do not weaken or delete existing tests to make a change pass. If a test is

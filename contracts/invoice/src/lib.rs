@@ -457,8 +457,13 @@ impl InvoiceContract {
         Self::allowed_tokens(&env)
     }
 
+    /// Interface version, `vMAJOR_MINOR_PATCH` (Symbol can't hold dots).
+    /// Policy in README#versioning: MINOR bumps on wire-compatible ABI
+    /// additions, so the post-v1 additions (get_invoice_range,
+    /// get_client_history, invoice_count, *_with_token, allowlist reads)
+    /// make this `v1_1_0`. The live testnet instance still reports `v1`.
     pub fn version(env: Env) -> Symbol {
-        Symbol::new(&env, "v1")
+        Symbol::new(&env, "v1_1_0")
     }
 
     fn default_token(env: &Env) -> Result<Address, Error> {

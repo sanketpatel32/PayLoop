@@ -30,9 +30,10 @@ on-chain, which is what makes the income history portable and tamper-proof.
 
 Rust / `soroban-sdk` 27. State is keyed by an enum `DataKey`:
 
-- `Admin`, `DefaultToken`, `NextId` — instance storage set at `initialize`.
+- `Admin`, `DefaultToken`, `AllowedTokens`, `NextId` — instance storage set at `initialize`.
 - `Invoice(u64)` — each invoice struct, persistent storage.
 - `History(Address)` — per-freelancer list of invoice ids, persistent.
+- `ClientHistory(Address)` — per-client list of invoice ids, persistent.
 
 Entry points:
 
@@ -44,15 +45,16 @@ Entry points:
 | `create_invoice_with_token(..., token)`                             | freelancer | same, with an explicit allowlisted token stored on the invoice (`TokenNotAllowed` otherwise)                                                                                            |
 | `fund_invoice(invoice_id)`                                          | client     | pre-checks the client balance (typed `InsufficientBalance` error instead of an opaque token trap), then atomic `token.transfer(client → freelancer)`, marks `Paid`, emits `InvoicePaid` |
 | `release_funds(invoice_id)`                                         | —          | reserved seam for future held-escrow; no-op in the instant-release MVP                                                                                                                  |
-| `get_invoice(id)` / `get_invoice_history(freelancer)`               | — (read)   | reads                                                                                                                                                                                   |
-| `default_token_address()` / `get_allowed_tokens()` / `version()`    | — (read)   | metadata                                                                                                                                                                                |
+| `get_invoice(id)` / `get_invoice_history(freelancer)`               | — (read)   | reads (the latter loads the full history — prefer `get_invoice_range`)                                                                                                                    |
+| `invoice_count()` / `get_invoice_range(f, start, len)` / `get_client_history(c)` | — (read) | created-total count; paginated freelancer history (`len` ≤ `MAX_PAGE_LEN` = 25); per-client history. Not yet on the deployed testnet instance (v1)                                     |
+| `default_token_address()` / `get_allowed_tokens()` / `version()`    | — (read)   | metadata; `version()` reports `v1_1_0` per the semver policy in the contract README                                                                                                        |
 
 Errors are a typed `contracterror` enum (`NotInitialized`, `AlreadyInitialized`,
 `InvoiceNotFound`, `AlreadyPaid`, `InvalidAmount`, and — appended after the
 v1 testnet deployment, keeping codes 1–5 wire-compatible —
 `InvalidDescription`, `InvalidParties`, `InsufficientBalance`, `TokenNotAllowed`).
 
-Eighteen unit tests in `contracts/invoice/src/test.rs` cover the
+Twenty-six unit tests in `contracts/invoice/src/test.rs` cover the
 create→fund→paid loop, history ordering and empty-history, double-funding
 rejection, non-positive amounts, missing invoices, timestamps,
 double-initialize, sequential id allocation, self-directed invoices, empty

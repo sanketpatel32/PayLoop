@@ -2,12 +2,13 @@
 
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger as _},
-    token, Address, Env, String,
-};
-use soroban_sdk::{
+    symbol_short,
     testutils::{MockAuth, MockAuthInvoke},
     IntoVal,
+};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    token, Address, Env, String,
 };
 
 /// Deploys a token (Stellar Asset Contract) we control, mints `amount` to
@@ -603,6 +604,13 @@ fn get_invoice_range_caps_page_at_max_len() {
     // The remainder is reachable on the next page.
     let range = s.contract.get_invoice_range(&freelancer, &25, &10);
     assert_eq!(range.len(), 2);
+}
+
+#[test]
+fn version_reports_semver_symbol() {
+    let s = setup();
+    // Policy: MINOR bump for wire-compatible ABI additions since v1.
+    assert_eq!(s.contract.version(), symbol_short!("v1_1_0"));
 }
 
 #[test]

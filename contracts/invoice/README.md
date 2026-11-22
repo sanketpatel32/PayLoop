@@ -48,13 +48,20 @@ no funds movement** — do not build against it.
 | `NextId` | instance | `create_invoice` | monotonically increasing invoice counter starting at 1 |
 | `Invoice(id)` | persistent | `create_invoice`, `fund_invoice` | the full `Invoice` record |
 | `History(freelancer)` | persistent | `create_invoice` | per-freelancer ordered list of invoice ids |
+| `ClientHistory(client)` | persistent | `create_invoice` | per-client ordered list of invoice ids |
 
 Known scaling limitation: `get_invoice_history` loads every invoice struct for
-one freelancer in a single call. Past a few hundred invoices per freelancer a
-deployed instance will hit Soroban read-footprint limits; a platform building
-on this contract should add a paginated accessor (e.g. `invoice_count(address)`
-+ `get_invoice_range(address, start, len)`) rather than reading everything at
-once.
+one freelancer in a single call, and `get_client_history` does the same for a
+client. Past a few hundred invoices per address a deployed instance will hit
+Soroban read-footprint limits — integrators should page with
+`get_invoice_range(freelancer, start, len)` (max `len` = `MAX_PAGE_LEN` = 25)
+instead. A client-side paginated accessor doesn't exist yet; fetch each id
+from `ClientHistory` via `get_invoice` if you need client-side paging.
+
+`invoice_count`, `get_invoice_range`, `get_client_history`,
+`create_invoice_with_token`, `add_allowed_token`, `get_allowed_tokens` and
+the `ClientHistory` key are newer than the testnet deployment — the deployed
+instance is `v1` and does not have them (see [versioning](#versioning)).
 
 ## Entrypoints
 
@@ -73,7 +80,7 @@ once.
 | `get_client_history` | read-only | `client` | `Vec<Invoice>` | — |
 | `default_token_address` | read-only | — | token `Address` | — |
 | `get_allowed_tokens` | read-only | — | `Vec<Address>` | — |
-| `version` | read-only | — | `"v1"` symbol | — |
+| `version` | read-only | — | `"v1_1_0"` symbol (see [versioning](#versioning)) | — |
 
 Semantics worth knowing:
 
@@ -94,15 +101,42 @@ Semantics worth knowing:
   still be paid so late payments are not locked out.
 - Double funding is impossible: a second `fund_invoice` on a `Paid` invoice
   returns `AlreadyPaid`.
-- No allowlist for clients: any address can fund any `Pending` invoice by
-  passing its own auth. This is intentional — the invoice names who *should*
-  pay, but the chain doesn't need to restrict who *can*.
+- Only the named client can fund: `fund_invoice` calls
+  `invoice.client.require_auth()` and transfers from `invoice.client`, so a
+  third party cannot pay someone else's invoice. Requiring the named client's
+  auth is also what makes the `Paid` event trustworthy as a receipt.
 - `invoice_count` is the number of invoices ever created (`NextId - 1`), so
   `1..=invoice_count()` enumerates every id exactly once.
 - `get_invoice_range` pages a freelancer's history: `len` is capped at
   `MAX_PAGE_LEN` (25) to bound the read footprint, `start` beyond the end
   returns an empty page, and `start + len` is saturating so extreme `u32`
   inputs can never trap.
+
+## Versioning
+
+`version()` returns a symbol `vMAJOR_MINOR_PATCH` encoding semantic version
+(`Symbol` cannot contain dots, so underscores separate the numbers):
+
+- **MAJOR** — a breaking ABI change: a removed or re-signed entrypoint, a
+  changed error code, a changed `Invoice`/`DataKey` layout. Requires a new
+  contract id and a migration plan.
+- **MINOR** — an ABI addition that keeps everything wire-compatible: new
+  entrypoints, or error codes *appended* after the existing ones. A redeploy
+  is enough; existing clients keep working.
+- **PATCH** — no ABI change at all: internal fixes, gas improvements, docs.
+
+The v1 testnet deployment predates `get_invoice_range`, `get_client_history`,
+`invoice_count`, `create_invoice_with_token`, `add_allowed_token`,
+`get_allowed_tokens` and the `ClientHistory` key — ABI additions that keep
+codes 1–5 stable — so the source is `v1_1_0` and bumps to `v1_1_0` on the
+next redeploy. `deployment.testnet.json` records what is actually live via
+its `contractVersion` field. Each bump gets a CHANGELOG entry.
+
+## Integration examples
+
+See [`../../examples/`](../../examples/README.md): a Rust contract that calls
+`get_invoice`/`version` via cross-contract invocation, and a Node.js script
+that reads and creates invoices over Soroban RPC.
 
 ## Error codes
 

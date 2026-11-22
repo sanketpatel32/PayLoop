@@ -165,6 +165,17 @@ export default function HelpPage() {
           },
         ]}
       />
+
+      <p className="text-center text-sm text-slate-400">
+        Unfamiliar terms? See the{" "}
+        <Link
+          href="https://github.com/Yormee-103/PayLoop/blob/main/docs/GLOSSARY.md"
+          className="text-brand-300 hover:underline"
+        >
+          glossary
+        </Link>{" "}
+        for plain-language definitions.
+      </p>
     </div>
   );
 }
